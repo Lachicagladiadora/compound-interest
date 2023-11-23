@@ -2,6 +2,12 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import { useCallback, useState } from "react";
 
+type GetFinalAmoutInput = {
+  amount: number;
+  interest: number;
+  iteration: number;
+};
+
 const width = 840;
 const height = 550;
 const marginTop = 20;
@@ -10,91 +16,63 @@ const marginBottom = 30;
 const marginLeft = 40;
 
 function App() {
-  const [amount, setAmount] = useState<number>();
-  const [interest, setInterest] = useState<number>(0.01);
-  const [iteration, setIteration] = useState<number>();
+  const [amount, setAmount] = useState(0);
+  const [interest, setInterest] = useState(0.01);
+  const [iteration, setIteration] = useState(1);
 
-  if (amount < 0) return setAmount(0);
-  if (interest < 0) return setInterest(0.1);
-  if (iteration < 1) return setIteration(1);
-
-  const finalAmount =
-    amount *
-    (1 + interest / (100 * (iteration - 1))) **
-      ((iteration - 1) * (iteration / 12));
-
-  const barData: object = new Array(iteration).fill(amount).reduce(
-    (acu) => {
-      const newCapital = acu.last * interest + acu.last;
-      console.log(newCapital);
-      return {
-        last: newCapital,
-        barDataArray: [...acu.barDataArray, newCapital],
-      };
-    },
-    { last: amount, barDataArray: [] }
-  );
-
-  console.log({ barData });
-  // console.log(barData.barDataArray);
-
-  const generateAxes = () => {
-    const x = d3
-      .scaleUtc()
-      .domain([0, iteration])
-      .range([marginLeft, width - marginRight]);
-
-    const y = d3
-      .scaleLinear()
-      .domain([0, amount + interest])
-      .range([height - marginBottom, marginTop]);
-
-    const svg = d3.create("svg").attr("width", width).attr("height", height);
-
-    svg
-      .append("g")
-      .attr("transform", `translate(0,${height - marginBottom})`)
-      .call(d3.axisBottom(x));
-
-    svg
-      .append("g")
-      .attr("transform", `translate(${marginLeft},0)`)
-      .call(d3.axisLeft(y));
-
-    return svg;
+  const onChangeAmount = (newValue: number) => {
+    if (amount < 0) return setAmount(0);
+    setAmount(newValue);
   };
 
-  const drawBarChart = (data: number[], root: SVGGElement) => {
-    const interestElement = d3.select(root).selectAll("rect").data(data);
-    interestElement
-      .join("rect")
-      .attr("x", function (_: number, i: number) {
-        return i * 10;
-      })
-      .attr("y", function (d: number) {
-        return height - d * amount;
-      })
-      .attr("width", 5)
-      .attr("height", function (d: number) {
-        return d * amount;
-      })
-      .attr("fill", "green");
+  const onChangeInterest = (newValue: number) => {
+    if (interest < 0) return setInterest(0.1);
+    setInterest(newValue);
   };
 
-  const axesRef = useCallback(
+  const onChangeIteration = (newValue: number) => {
+    if (iteration < 1) return setIteration(1);
+    setIteration(newValue);
+  };
+
+  const getFinalAmount = ({
+    amount,
+    interest,
+    iteration,
+  }: GetFinalAmoutInput) => {
+    return (
+      amount *
+      (1 + interest / (100 * (iteration - 1))) **
+        ((iteration - 1) * (iteration / 12))
+    );
+  };
+
+  const interestChartRef = useCallback(
     (container: SVGGElement | null) => {
       if (!container) return;
-      container.append(generateAxes().node());
-    },
-    [amount, interest, iteration]
-  );
 
-  const barChartRef = useCallback(
-    (container: SVGGElement) => {
-      if (!container) return;
-      return drawBarChart(barData.barDataArray, container);
+      d3.select(container).attr("background", "red");
+
+      const barChartRoot = d3.select(container).select("#bar-chart");
+      const axesChartRoot = d3.select(container).select("#axes-chart");
+      console.log({ barChartRoot });
+      console.log({ axesChartRoot });
+      const data = getCompoundRate({ iteration, amount, interest });
+      drawBarChart({ data, root: barChartRoot, amount });
+      drawAxesChart({
+        amount,
+        height,
+        interest,
+        iteration,
+        marginBottom,
+        marginLeft,
+        marginRight,
+        marginTop,
+        root: axesChartRoot,
+        width,
+      });
     },
-    [interest, amount, iteration]
+    [iteration, amount, interest]
   );
 
   return (
@@ -137,7 +115,7 @@ function App() {
           </label>
           <input
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            onChange={(e) => onChangeAmount(Number(e.target.value))}
             style={{
               padding: "6px",
               border: `${amount < 1 ? "none" : "red"}`,
@@ -165,7 +143,7 @@ function App() {
           </label>
           <input
             value={interest}
-            onChange={(e) => setInterest(Number(e.target.value))}
+            onChange={(e) => onChangeInterest(Number(e.target.value))}
             style={{
               padding: "6px",
               border: `${interest < 0 ? "none" : "red"}`,
@@ -193,7 +171,7 @@ function App() {
           </label>
           <input
             value={iteration}
-            onChange={(e) => setIteration(Number(e.target.value))}
+            onChange={(e) => onChangeIteration(Number(e.target.value))}
             style={{
               padding: "6px",
               border: `${iteration < 1 ? "none" : "red"}`,
@@ -206,20 +184,24 @@ function App() {
         </div>
       </section>
       <p>
-        The amount accumulated in {iteration} months is: 💵 {finalAmount} 💵
+        The amount accumulated in {iteration} months is: 💵{" "}
+        {getFinalAmount({ amount, interest, iteration })} 💵
       </p>
       <section style={{ flex: "1", position: "relative" }}>
-        <svg
+        {/* <svg
           ref={axesRef}
           style={{ position: "absolute", bottom: "-40px", left: "-40px" }}
-        />
+        /> */}
         <div style={{ width: `${width}`, height: `${height}` }}>
           <svg
-            ref={barChartRef}
+            ref={interestChartRef}
             width={width}
             height={height}
-            style={{ background: "silver" }}
-          />
+            style={{ background: "black" }}
+          >
+            <g id="bar-chart"></g>
+            <g id="axes-chart"></g>
+          </svg>
         </div>
       </section>
     </main>
@@ -227,3 +209,103 @@ function App() {
 }
 
 export default App;
+
+type GetCompoundRateInput = {
+  iteration: number;
+  amount: number;
+  interest: number;
+};
+
+type CompoundRateResult = {
+  last: number;
+  data: number[];
+};
+
+type drawBarChartInput = {
+  amount: number;
+  data: number[];
+  root: any;
+};
+
+type drawAxeChartInput = {
+  amount: number;
+  iteration: number;
+  interest: number;
+  root: any;
+  height: number;
+  width: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  data?: number[];
+};
+
+const getCompoundRate = ({
+  iteration,
+  amount,
+  interest,
+}: GetCompoundRateInput): number[] => {
+  const { data } = new Array(iteration).fill(amount).reduce(
+    (acu: CompoundRateResult): CompoundRateResult => {
+      const newCapital = acu.last * interest + acu.last;
+      console.log(newCapital);
+      return {
+        last: newCapital,
+        data: [...acu.data, newCapital],
+      };
+    },
+    { last: amount, data: [] }
+  );
+  return data;
+};
+
+const drawBarChart = ({ amount, data, root }: drawBarChartInput) => {
+  console.log({ root });
+
+  const rectElement = root.selectAll("rect").data(data);
+  rectElement
+    .join("rect")
+    .attr("x", function (_: number, i: number) {
+      return i * 10;
+    })
+    .attr("y", function (d: number) {
+      return height - d * amount;
+    })
+    .attr("width", 5)
+    .attr("height", function (d: number) {
+      return d * amount;
+    })
+    .attr("fill", "green");
+};
+
+const drawAxesChart = ({
+  amount,
+  iteration,
+  interest,
+  root,
+  height,
+  width,
+  marginTop,
+  marginRight,
+  marginBottom,
+  marginLeft,
+}: drawAxeChartInput) => {
+  // const rootElement = d3.select(root);
+  console.log({ root }, "root2");
+  const xAxe = d3
+    .scaleLinear()
+    .domain([0, iteration])
+    .range([marginLeft, width - marginRight]);
+
+  const yAxe = d3
+    .scaleLinear()
+    .domain([0, amount + interest])
+    .range([height - marginBottom, marginTop]);
+
+  root
+    .attr("transform", `translate(0,${height - marginBottom})`)
+    .call(d3.axisBottom(xAxe));
+
+  root.attr("transform", `translate(${marginLeft},0)`).call(d3.axisLeft(yAxe));
+};
