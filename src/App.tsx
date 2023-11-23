@@ -2,26 +2,51 @@ import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
 import { useCallback, useState } from "react";
 
-function App() {
-  const [mount, setMount] = useState(0);
-  const [interest, setInterest] = useState(0);
-  const [month, setMonth] = useState(1);
+const width = 840;
+const height = 550;
+const marginTop = 20;
+const marginRight = 20;
+const marginBottom = 30;
+const marginLeft = 40;
 
-  const width = 640;
-  const height = 400;
-  const marginTop = 20;
-  const marginRight = 20;
-  const marginBottom = 30;
-  const marginLeft = 40;
+function App() {
+  const [amount, setAmount] = useState<number>();
+  const [interest, setInterest] = useState<number>(0.01);
+  const [iteration, setIteration] = useState<number>();
+
+  if (amount < 0) return setAmount(0);
+  if (interest < 0) return setInterest(0.1);
+  if (iteration < 1) return setIteration(1);
+
+  const finalAmount =
+    amount *
+    (1 + interest / (100 * (iteration - 1))) **
+      ((iteration - 1) * (iteration / 12));
+
+  const barData: object = new Array(iteration).fill(amount).reduce(
+    (acu) => {
+      const newCapital = acu.last * interest + acu.last;
+      console.log(newCapital);
+      return {
+        last: newCapital,
+        barDataArray: [...acu.barDataArray, newCapital],
+      };
+    },
+    { last: amount, barDataArray: [] }
+  );
+
+  console.log({ barData });
+  // console.log(barData.barDataArray);
+
   const generateAxes = () => {
     const x = d3
       .scaleUtc()
-      .domain([0, month])
+      .domain([0, iteration])
       .range([marginLeft, width - marginRight]);
 
     const y = d3
       .scaleLinear()
-      .domain([0, mount + interest])
+      .domain([0, amount + interest])
       .range([height - marginBottom, marginTop]);
 
     const svg = d3.create("svg").attr("width", width).attr("height", height);
@@ -44,36 +69,38 @@ function App() {
     interestElement
       .join("rect")
       .attr("x", function (_: number, i: number) {
-        return i * 80;
+        return i * 10;
       })
       .attr("y", function (d: number) {
-        return 200 - d * 5;
+        return height - d * amount;
       })
-      .attr("width", 70)
+      .attr("width", 5)
       .attr("height", function (d: number) {
-        return d * 5;
+        return d * amount;
       })
-      .attr("fill", "blue");
+      .attr("fill", "green");
   };
 
-  const axesRef = useCallback((container: SVGGElement | null) => {
-    if (!container) return;
-    container.append(generateAxes().node());
-  }, []);
+  const axesRef = useCallback(
+    (container: SVGGElement | null) => {
+      if (!container) return;
+      container.append(generateAxes().node());
+    },
+    [amount, interest, iteration]
+  );
 
   const barChartRef = useCallback(
     (container: SVGGElement) => {
-      // if (!container) return
-      return drawBarChart(interest, container);
+      if (!container) return;
+      return drawBarChart(barData.barDataArray, container);
     },
-    [interest]
+    [interest, amount, iteration]
   );
 
   return (
     <main
       style={{
         width: "100%",
-        // height: "100vh",
         display: "flex",
         gap: "20px",
         flexDirection: "column",
@@ -86,7 +113,7 @@ function App() {
       </header>
       <section
         style={{
-          width: "300px",
+          width: "400px",
           height: "60%",
           display: "flex",
           gap: "20px",
@@ -100,16 +127,25 @@ function App() {
             alignItems: "center",
           }}
         >
-          <label htmlFor="initial-mount">Initial Mount </label>
+          <label
+            htmlFor="initial-mount"
+            style={{
+              color: `${amount < 1 ? "red" : "green"}`,
+            }}
+          >
+            Initial Amount{" "}
+          </label>
           <input
-            value={mount}
-            onChange={(e) => setMount(Number(e.target.value))}
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
             style={{
               padding: "6px",
+              border: `${amount < 1 ? "none" : "red"}`,
+              color: `${amount < 1 ? "red" : "green"}`,
             }}
             type="number"
             id="initial-mount"
-            placeholder="enter initial mount"
+            placeholder="enter initial amount"
           />
         </div>
         <div
@@ -119,12 +155,21 @@ function App() {
             alignItems: "center",
           }}
         >
-          <label htmlFor="interest">Interest (%)</label>
+          <label
+            htmlFor="interest"
+            style={{
+              color: `${interest <= 0 ? "red" : "green"}`,
+            }}
+          >
+            Annual Interest (%)
+          </label>
           <input
             value={interest}
             onChange={(e) => setInterest(Number(e.target.value))}
             style={{
               padding: "6px",
+              border: `${interest < 0 ? "none" : "red"}`,
+              color: `${interest < 0 ? "red" : "green"}`,
             }}
             type="number"
             id="interest"
@@ -138,27 +183,44 @@ function App() {
             alignItems: "center",
           }}
         >
-          <label htmlFor="month">Month </label>
+          <label
+            htmlFor="month"
+            style={{
+              color: `${iteration < 1 ? "red" : "green"}`,
+            }}
+          >
+            Number of iterations{" "}
+          </label>
           <input
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
+            value={iteration}
+            onChange={(e) => setIteration(Number(e.target.value))}
             style={{
               padding: "6px",
+              border: `${iteration < 1 ? "none" : "red"}`,
+              color: `${iteration < 1 ? "red" : "green"}`,
             }}
             type="number"
             id="month"
-            placeholder="enter month in number"
+            placeholder="enter number of iterations"
           />
         </div>
       </section>
-      <section style={{ flex: "1" }}>
-        <svg ref={axesRef} />
+      <p>
+        The amount accumulated in {iteration} months is: 💵 {finalAmount} 💵
+      </p>
+      <section style={{ flex: "1", position: "relative" }}>
         <svg
-          ref={barChartRef}
-          width={width}
-          height={height}
-          style={{ background: "whiteSmoke" }}
+          ref={axesRef}
+          style={{ position: "absolute", bottom: "-40px", left: "-40px" }}
         />
+        <div style={{ width: `${width}`, height: `${height}` }}>
+          <svg
+            ref={barChartRef}
+            width={width}
+            height={height}
+            style={{ background: "silver" }}
+          />
+        </div>
       </section>
     </main>
   );
